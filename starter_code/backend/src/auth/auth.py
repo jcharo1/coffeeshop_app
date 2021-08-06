@@ -1,5 +1,5 @@
 import json
-from flask import request, _request_ctx_stack
+from flask import request, _request_ctx_stack, abort
 from functools import wraps
 from jose import jwt
 from urllib.request import urlopen
@@ -22,17 +22,6 @@ class AuthError(Exception):
 
 ## Auth Header
 
-'''
-@TODO implement get_token_auth_header() method
-    it should attempt to get the header from the request
-        it should raise an AuthError if no header is present
-    it should attempt to split bearer and the token
-        it should raise an AuthError if the header is malformed
-    return the token part of the header
-'''
-# def get_token_auth_header():
-#    raise Exception('Not Implemented')
-   
 def get_token_auth_header():
     """Obtains the Access Token from the Authorization Header
     """
@@ -65,9 +54,6 @@ def get_token_auth_header():
     token = parts[1]
     return token
 
-
-
-
 '''
 @TODO implement check_permissions(permission, payload) method
     @INPUTS
@@ -79,9 +65,20 @@ def get_token_auth_header():
     it should raise an AuthError if the requested permission string is not in the payload permissions array
     return true otherwise
 '''
-def check_permissions(permission, payload):
-    raise Exception('Not Implemented')
 
+def check_permissions(permission, payload):
+    if 'permissions' not in payload:
+                        raise AuthError({
+                            'code': 'invalid_claims',
+                            'description': 'Permissions not included in JWT.'
+                        }, 400)
+
+    if permission not in payload['permissions']:
+        raise AuthError({
+            'code': 'unauthorized',
+            'description': 'Permission not found.'
+        }, 403)
+    return True
 '''
 @TODO implement verify_decode_jwt(token) method
     @INPUTS
@@ -95,8 +92,6 @@ def check_permissions(permission, payload):
 
     !!NOTE urlopen has a common certificate error described here: https://stackoverflow.com/questions/50236117/scraping-ssl-certificate-verify-failed-error-for-http-en-wikipedia-org
 '''
-# def verify_decode_jwt(token):
-#     raise Exception('Not Implemented')
 
 def verify_decode_jwt(token):
     jsonurl = urlopen(f'https://{AUTH0_DOMAIN}/.well-known/jwks.json')
@@ -164,9 +159,15 @@ def requires_auth(permission=''):
     def requires_auth_decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
-            token = get_token_auth_header()
-            payload = verify_decode_jwt(token)
-            check_permissions(permission, payload)
+            
+            try:
+                token = get_token_auth_header()
+                payload = verify_decode_jwt(token)
+            except:
+                abort(401)
+            
+            check_permissions(permission,payload)
+            
             return f(payload, *args, **kwargs)
 
         return wrapper
